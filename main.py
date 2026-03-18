@@ -32,6 +32,7 @@ from core.sample_utils import (
     get_FastDiME_iterative_sampling,
     get_GMD_iterative_sampling,
     clean_class_cond_fn,
+    clean_multiclass_cond_fn,
     dist_cond_fn,
     ImageSaver,
     ImageSaverCF,
@@ -361,7 +362,8 @@ def main():
         vggloss = None
 
 
-    cond_fn = clean_class_cond_fn
+    # cond_fn = clean_class_cond_fn
+    cond_fn = clean_multiclass_cond_fn
     # ========================================
     # get sampling function self-optmized masking variable
     if args.method == 'fastdime':
@@ -433,14 +435,19 @@ def main():
         # Initial Classification, no noise included
         with torch.no_grad():
             logits = classifier(img)
-            pred = (logits > 0).long() 
+            if args.cabrnet:
+                logits = logits[0] # the first element is the logits of classification tensor, the second is the distances to prototypes iirc
+                logits = torch.argmax(logits, dim=1)
+                pred = logits.long()
+            else:
+                pred = (logits > 0).long()
 
         acc += (pred == lab).sum().item()
         n += lab.size(0)
 
-                # target = 1 - pred
-        # if args.target_class == -1:
-        #     raise Exception("Choose a real target class")
+        # target = 1 - pred
+        if args.target_class == -1:
+            raise Exception("Choose a real target class")
         target = torch.ones_like(pred) * args.target_class
         # if 1==1:
         #     raise Exception("Figure out mechanism to select target class")
@@ -449,7 +456,9 @@ def main():
 
         # add noise to the input image 
         noise_img = diffusion.q_sample(img, t)
-
+        # why is it initialized negative if we flip it later?
+        # probably this list tracks whether the generated counterfactual successfully flips the label
+        # implication: will need a function to determine whether a counterfactually "successfully represents a prototype"
         transformed = torch.zeros_like(lab).bool()
 
         batch_start_time = time()
@@ -458,9 +467,10 @@ def main():
 
             # choose the target label
             model_kwargs = {}
+            #flipping of transformed
             model_kwargs['y'] = target[~transformed]
-            if 1==1:
-                raise Exception("Figure out how to do the target[~transformed]")
+            # if 1==1:
+            #     raise Exception("Figure out how to do the target[~transformed]")
             # sample image from the noisy_img
             cfs, xs_t_s, zs_t_s = sample_fn(
                 diffusion,
