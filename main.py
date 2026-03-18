@@ -538,7 +538,7 @@ def main():
 
             # evaluate the cf and check whether the model flipped the prediction
             with torch.no_grad():
-                cfsl = classifier(cfs)
+                cfsl, _ = classifier(cfs)
                 cfsp = cfsl > 0
             
             if jdx == 0:
