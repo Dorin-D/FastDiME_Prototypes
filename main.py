@@ -111,7 +111,10 @@ def create_args():
         chunk=0,
         save_x_t=False,
         save_z_t=False,
-        save_images=True
+        save_images=True,
+        cabrnet=False,
+        target_class=-1,
+        subsampling=1,
     )
     defaults.update(model_and_diffusion_defaults())
     parser = argparse.ArgumentParser()
@@ -261,7 +264,10 @@ def main():
                                 random_crop=False,
                                 random_flip=False,
                                 query_label=args.query_label)
-
+    elif args.dataset == "Cub200":
+        from cabrnet.core.utils.data import DatasetManager
+        dataset = DatasetManager.get_datasets(config=args.data_dir, sampling_ratio=args.subsampling)
+        dataset = dataset["test_set"]["dataset"]
     elif 'CelebAMV' in args.dataset:
         if args.dataset == 'CelebAMV':
             csv_file ='utils/minival.csv'
@@ -295,11 +301,11 @@ def main():
 
         raise Exception(f'dataset {args.dataset} not implemented')
 
-    if len(dataset) - args.batch_size * args.num_batches > 0:
-        dataset = SlowSingleLabel(query_label=1 - args.target_label if args.target_label != -1 else -1,
-                                  dataset=dataset,
-                                  maxlen=args.batch_size * args.num_batches)
-
+    # if len(dataset) - args.batch_size * args.num_batches > 0:
+    #     dataset = SlowSingleLabel(query_label=1 - args.target_label if args.target_label != -1 else -1,
+    #                               dataset=dataset,
+    #                               maxlen=args.batch_size * args.num_batches)
+    # fails with Cabrnet datasets smh
     # breaks the dataset into chunks
     dataset = ChunkedDataset(dataset=dataset,
                              chunk=args.chunk,
@@ -332,7 +338,14 @@ def main():
     
     print('Loading Classifier')
 
-    classifier = ClassificationModel(args.classifier_path, args.query_label).to(dist_util.dev())
+    if args.cabrnet == True:
+        from cabrnet.archs.generic.model import CaBRNet
+        # cabrnet loading procedure
+        model_arch = args.model_arch # "/home/dorin/Research/repos/cabrnet/configs/protopnet/cub200/model_arch_counter.yml"
+        model_state_dict = args.model_state_dict #"/home/dorin/Research/repos/cabrnet/training_run/cub256/best/model_state.pth"
+        classifier = CaBRNet.build_from_config(config=model_arch, state_dict_path=model_state_dict).to(dist_util.dev())
+    else:
+        classifier = ClassificationModel(args.classifier_path, args.query_label).to(dist_util.dev())
     classifier.eval()
 
     # ========================================
@@ -404,11 +417,14 @@ def main():
     classifier_scales = [float(x) for x in args.classifier_scales.split(',')]
 
     print('Starting Image Generation')
-    for idx, (indexes, img, lab, task_label) in enumerate(loader):
+    # for idx, (indexes, img, lab, task_label) in enumerate(loader):
+    for idx, (indexes, img, lab) in enumerate(loader): #we don't return task_label
+        #lab: true labels, pred: predicted labels, target: class we want to convert image to 
+        task_label = -1 #protopnet dataset does not return a task label
         print(f'[Chunk {args.chunk + 1} / {args.num_chunks}] {idx} / {min(args.num_batches, len(loader))} | Time: {int(time() - start_time)}s')
         # print(idx, indexes)
         img = img.to(dist_util.dev())
-        I = (img / 2) + 0.5
+        # I = (img / 2) + 0.5 # this looks useless / never used
         lab = lab.to(dist_util.dev(), dtype=torch.long)
         t = torch.zeros(img.size(0), device=dist_util.dev(),
                         dtype=torch.long)
@@ -421,8 +437,12 @@ def main():
         acc += (pred == lab).sum().item()
         n += lab.size(0)
 
-        # as the model is binary, the target will always be the inverse of the prediction
-        target = 1 - pred
+                # target = 1 - pred
+        # if args.target_class == -1:
+        #     raise Exception("Choose a real target class")
+        target = torch.ones_like(pred) * args.target_class
+        # if 1==1:
+        #     raise Exception("Figure out mechanism to select target class")
 
         t = torch.ones_like(t) * args.start_step
 
@@ -438,7 +458,8 @@ def main():
             # choose the target label
             model_kwargs = {}
             model_kwargs['y'] = target[~transformed]
-
+            if 1==1:
+                raise Exception("Figure out how to do the target[~transformed]")
             # sample image from the noisy_img
             cfs, xs_t_s, zs_t_s = sample_fn(
                 diffusion,
