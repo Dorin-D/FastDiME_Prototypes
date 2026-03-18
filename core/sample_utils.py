@@ -90,7 +90,9 @@ def clean_multiclass_cond_fn(x_t, y, classifier,
                              s, use_logits):
     
     x_in = x_t.detach().requires_grad_(True)
-    selected = classifier(x_in)
+    # selected = classifier(x_in)
+    # cabrnet returns two values (preds and min_distances to prototypes), take only the first
+    selected = classifier(x_in)[0]
 
     # Select the target logits
     if not use_logits:
