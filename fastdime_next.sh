@@ -22,12 +22,13 @@ MODELPATH="imagenet_cond_ddpm/256x256_diffusion_uncond.pt"
 SAMPLE_FLAGS="--batch_size 10 --timestep_respacing 200"
 # DATAPATH="/home/dorin/Research/repos/github/DiME_CelebA/CelebA/Img"
 DATAPATH="dataset_256.yml"
-CLASSIFIERPATH="DiME_Models/classifier.pth"
-#CLASSIFIERPATH="DiME_Models/protopnet_resnet_256_cub.pth"
+# CLASSIFIERPATH="DiME_Models/classifier.pth"
+CLASSIFIERPATH="DiME_Models/protopnet_resnet_256_cub.pth"
 ORACLEPATH="DiME_Models/oracle.pth"
 OUTPUT_PATH="output/004_AttemptNewDDPM"
 EXPNAME="004_Attempt_256_256"
 CABRNET=1
+MODEL_ARCH="DiME_Models/model_arch.yml"
 
 # parameters of the sampling
 GPU=0
@@ -40,7 +41,7 @@ PERC=30
 L1=0.05
 QUERYLABEL=31
 TARGETLABEL=-1
-IMAGESIZE=128  # dataset shape
+IMAGESIZE=256  # dataset shape
 NUMBATCHES=1
 # CHUNK=0
 NUM_CHUNKS=200
@@ -69,7 +70,7 @@ for ((CHUNK=0; CHUNK<=NUM_CHUNKS; CHUNK+=1)); do
 	    --use_sampling_on_x_t True \
 	    --save_images True --image_size $IMAGESIZE --chunk $CHUNK \
 	    --num_chunks $NUM_CHUNKS \
-	    --subsampling $SUBSAMPLING --cabrnet $CABRNET
+	    --subsampling $SUBSAMPLING --cabrnet $CABRNET --model_arch $MODEL_ARCH
 	break
 done
 

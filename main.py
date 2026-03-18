@@ -112,7 +112,8 @@ def create_args():
         save_x_t=False,
         save_z_t=False,
         save_images=True,
-        cabrnet=False,
+        cabrnet=0,
+        model_arch=None,
         target_class=-1,
         subsampling=1,
     )
@@ -338,11 +339,11 @@ def main():
     
     print('Loading Classifier')
 
-    if args.cabrnet == True:
+    if args.cabrnet == 1:
         from cabrnet.archs.generic.model import CaBRNet
         # cabrnet loading procedure
         model_arch = args.model_arch # "/home/dorin/Research/repos/cabrnet/configs/protopnet/cub200/model_arch_counter.yml"
-        model_state_dict = args.model_state_dict #"/home/dorin/Research/repos/cabrnet/training_run/cub256/best/model_state.pth"
+        model_state_dict = args.classifier_path #"/home/dorin/Research/repos/cabrnet/training_run/cub256/best/model_state.pth"
         classifier = CaBRNet.build_from_config(config=model_arch, state_dict_path=model_state_dict).to(dist_util.dev())
     else:
         classifier = ClassificationModel(args.classifier_path, args.query_label).to(dist_util.dev())
